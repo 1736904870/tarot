@@ -1,0 +1,957 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>塔罗牌抽牌 · AI解读</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif;
+    background: linear-gradient(135deg, #0a0a1a 0%, #1a1a3a 50%, #0d0d2a 100%);
+    min-height: 100vh; color: #e8dcc8; overflow-x: hidden;
+  }
+  body::before {
+    content: ''; position: fixed; top:0; left:0; right:0; bottom:0;
+    background-image:
+      radial-gradient(2px 2px at 20px 30px, #fff, transparent),
+      radial-gradient(2px 2px at 40px 70px, rgba(255,255,255,0.8), transparent),
+      radial-gradient(1px 1px at 90px 40px, #fff, transparent),
+      radial-gradient(2px 2px at 130px 80px, rgba(255,255,255,0.6), transparent),
+      radial-gradient(1px 1px at 160px 120px, #fff, transparent);
+    background-size: 200px 200px; animation: twinkle 8s ease-in-out infinite;
+    pointer-events: none; z-index: 0;
+  }
+  @keyframes twinkle { 0%,100%{opacity:0.5} 50%{opacity:1} }
+  .container { position: relative; z-index: 1; max-width: 1100px; margin: 0 auto; padding: 25px 20px; }
+  h1 {
+    text-align: center; font-size: 2.2em;
+    background: linear-gradient(135deg, #f0d68a, #c9a84c, #f0d68a);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    margin-bottom: 5px; letter-spacing: 6px;
+  }
+  .subtitle { text-align: center; color: #8a7a5c; font-size: 0.88em; margin-bottom: 25px; letter-spacing: 2px; }
+  .panel {
+    background: rgba(20,20,45,0.85); border: 1px solid rgba(201,168,76,0.3);
+    border-radius: 14px; padding: 20px 25px; margin-bottom: 20px;
+    backdrop-filter: blur(10px); box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  }
+  .panel-title { font-size: 1em; color: #c9a84c; letter-spacing: 3px; margin-bottom: 15px; }
+  .panel-title::before { content: '✦ '; }
+  .form-row { display: flex; flex-wrap: wrap; gap: 15px; align-items: flex-end; }
+  .form-group { display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 180px; }
+  .form-group label { font-size: 0.82em; color: #c9a84c; letter-spacing: 1px; }
+  .form-group input, .form-group select, .form-group textarea {
+    background: rgba(10,10,30,0.8); border: 1px solid rgba(201,168,76,0.35);
+    color: #e8dcc8; padding: 9px 13px; border-radius: 8px; font-size: 0.92em;
+    outline: none; transition: border-color 0.3s; font-family: inherit;
+  }
+  .form-group input:focus, .form-group select:focus, .form-group textarea:focus { border-color: #c9a84c; }
+  .form-group textarea { min-height: 65px; resize: vertical; }
+  .mode-tabs { display: flex; gap: 10px; margin-bottom: 15px; }
+  .mode-tab {
+    flex: 1; padding: 12px; text-align: center; border-radius: 10px; cursor: pointer;
+    border: 1px solid rgba(201,168,76,0.3); background: rgba(10,10,30,0.6);
+    transition: all 0.3s; font-size: 0.95em; letter-spacing: 2px;
+  }
+  .mode-tab:hover { border-color: rgba(201,168,76,0.6); }
+  .mode-tab.active {
+    background: linear-gradient(135deg, rgba(201,168,76,0.25), rgba(201,168,76,0.1));
+    border-color: #c9a84c; color: #f0d68a; font-weight: bold;
+  }
+  .mode-tab .mode-desc { font-size: 0.72em; color: #8a7a5c; margin-top: 4px; letter-spacing: 0; }
+  .mode-tab.active .mode-desc { color: #b8a060; }
+  .btn {
+    background: linear-gradient(135deg, #c9a84c, #8a6d2f); color: #0a0a1a;
+    border: none; padding: 12px 35px; font-size: 1.05em; font-weight: bold;
+    border-radius: 50px; cursor: pointer; letter-spacing: 3px; transition: all 0.3s;
+    box-shadow: 0 4px 20px rgba(201,168,76,0.4);
+  }
+  .btn:hover { transform: translateY(-2px); box-shadow: 0 6px 30px rgba(201,168,76,0.6); }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+  .btn-secondary {
+    background: transparent; color: #c9a84c; border: 1px solid #c9a84c;
+    box-shadow: none; padding: 10px 22px; font-size: 0.9em;
+  }
+  .btn-secondary:hover { background: rgba(201,168,76,0.1); }
+  .spread-area {
+    display: flex; flex-wrap: wrap; gap: 22px; justify-content: center;
+    min-height: 280px; padding: 15px 0;
+  }
+  .card-slot { display: flex; flex-direction: column; align-items: center; gap: 10px; perspective: 1000px; }
+  .card-position-label { font-size: 0.82em; color: #c9a84c; letter-spacing: 1px; min-height: 1.2em; text-align: center; }
+  .card {
+    width: 160px; height: 267px; position: relative; transform-style: preserve-3d;
+    transition: transform 0.8s cubic-bezier(0.4,0,0.2,1); cursor: pointer;
+  }
+  .card.flipped { transform: rotateY(180deg); }
+  .card.reversed.flipped { transform: rotateY(180deg) rotate(180deg); }
+  .card-face {
+    position: absolute; width: 100%; height: 100%; backface-visibility: hidden;
+    border-radius: 10px; overflow: hidden;
+    box-shadow: 0 8px 25px rgba(0,0,0,0.5), 0 0 15px rgba(201,168,76,0.2);
+    border: 2px solid rgba(201,168,76,0.5);
+  }
+  .card-back { background: linear-gradient(135deg, #1a1a4a, #2a1a4a, #1a1a4a); display: flex; align-items: center; justify-content: center; }
+  .card-back::before { content: '✦'; font-size: 3.5em; color: rgba(201,168,76,0.6); text-shadow: 0 0 20px rgba(201,168,76,0.5); }
+  .card-back-pattern { position: absolute; inset: 8px; border: 1px solid rgba(201,168,76,0.3); border-radius: 6px; }
+  .card-front { transform: rotateY(180deg); background: #fff; }
+  .card-front img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .card-info { text-align: center; min-height: 48px; }
+  .card-name { font-size: 1em; color: #f0d68a; font-weight: bold; }
+  .card-name-en { font-size: 0.72em; color: #8a7a5c; margin-top: 2px; }
+  .card-orientation {
+    display: inline-block; margin-top: 4px; padding: 2px 10px; border-radius: 20px;
+    font-size: 0.72em; letter-spacing: 1px;
+  }
+  .card-orientation.upright { background: rgba(76,175,80,0.2); color: #81c784; border: 1px solid rgba(76,175,80,0.4); }
+  .card-orientation.reversed { background: rgba(244,67,54,0.2); color: #ef9a9a; border: 1px solid rgba(244,67,54,0.4); }
+  .ai-actions { display: flex; gap: 12px; justify-content: center; margin-bottom: 15px; flex-wrap: wrap; }
+  .reading-box {
+    background: rgba(10,10,25,0.9); border: 1px solid rgba(201,168,76,0.25);
+    border-radius: 12px; padding: 25px; line-height: 1.9; font-size: 0.95em;
+    color: #d0c4a8; white-space: pre-wrap; min-height: 100px;
+  }
+  .reading-box h3 { color: #f0d68a; font-size: 1.1em; margin: 15px 0 6px; }
+  .reading-box h3:first-child { margin-top: 0; }
+  .reading-box strong { color: #e8d090; }
+  .status-msg { text-align: center; color: #8a7a5c; font-size: 0.88em; margin: 10px 0; min-height: 1.5em; }
+  .status-msg.error { color: #ef9a9a; }
+  .status-msg.success { color: #81c784; }
+  .operation-status {
+    margin-top: 12px; padding: 12px 18px; background: rgba(201,168,76,0.1);
+    border: 1px solid rgba(201,168,76,0.3); border-radius: 10px; text-align: center;
+    font-size: 0.92em; color: #f0d68a; letter-spacing: 1px;
+  }
+  .cursor-blink {
+    display: inline-block; width: 8px; height: 16px; background: #c9a84c;
+    animation: blink 1s infinite; vertical-align: middle; margin-left: 4px;
+  }
+  @keyframes blink { 0%,50%{opacity:1} 51%,100%{opacity:0} }
+  .footer { text-align: center; margin-top: 30px; color: #5a4a3a; font-size: 0.78em; letter-spacing: 2px; }
+  @media (max-width: 600px) {
+    h1 { font-size: 1.5em; letter-spacing: 3px; }
+    .card { width: 125px; height: 208px; }
+    .form-row { flex-direction: column; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>塔 罗 牌 · A I 解 读</h1>
+  <p class="subtitle">78张完整牌库 · 现实占卜 / 梦向占卜双模式</p>
+
+  <div class="panel">
+    <div class="panel-title">AI 接 口 设 置</div>
+    <div class="form-row">
+      <div class="form-group" style="flex:2;">
+        <label>API 地址（Base URL）</label>
+        <input type="text" id="apiBase" placeholder="https://api.deepseek.com/v1">
+      </div>
+      <div class="form-group" style="flex:1.5;">
+        <label>模型（点右侧获取）</label>
+        <div style="display:flex; gap:8px;">
+          <input type="text" id="apiModel" list="modelList" placeholder="点击获取或手动输入" style="flex:1;">
+          <datalist id="modelList"></datalist>
+          <button class="btn btn-secondary" style="padding:9px 14px; white-space:nowrap;" onclick="fetchModels()">获取</button>
+        </div>
+      </div>
+    </div>
+    <div class="form-row" style="margin-top:12px;">
+      <div class="form-group" style="flex:2;">
+        <label>API Key</label>
+        <input type="password" id="apiKey" placeholder="sk-xxxxxxxxxxxxxxxx" onkeydown="if(event.key==='Enter')fetchModels()">
+      </div>
+      <div class="form-group" style="flex:0.5;">
+        <label>&nbsp;</label>
+        <button class="btn btn-secondary" onclick="saveApiConfig()">保存</button>
+      </div>
+    </div>
+    <div class="status-msg" id="apiStatus"></div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-title">占 卜 设 置</div>
+    <div class="mode-tabs">
+      <div class="mode-tab active" data-mode="reality" onclick="setMode('reality')">
+        🔮 现实占卜
+        <div class="mode-desc">标准塔罗牌逻辑解读</div>
+      </div>
+      <div class="mode-tab" data-mode="dream" onclick="setMode('dream')">
+        🌙 梦向占卜（梦占）
+        <div class="mode-desc">梦女文化视角解读梦角传讯</div>
+      </div>
+    </div>
+    <div class="form-group" style="margin-bottom:15px;">
+      <label>你的占卜问题</label>
+      <textarea id="question" placeholder="现实占卜示例：我和他接下来的感情发展会怎么样？&#10;梦占示例：我梦角最近想对我说什么？我们的关系接下来会怎么发展？"></textarea>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>牌阵</label>
+        <select id="spreadSelect">
+          <option value="single">单张指引（1张）</option>
+          <option value="three" selected>过去·现在·未来（3张）</option>
+          <option value="five">五牌阵（5张）</option>
+          <option value="seven">七牌阵（7张）</option>
+          <option value="ten">凯尔特十字（10张）</option>
+          <option value="custom">自定义数量</option>
+        </select>
+      </div>
+      <div class="form-group" id="customGroup" style="display:none; max-width:100px;">
+        <label>数量</label>
+        <select id="customCount">
+          <option value="1">1</option><option value="2">2</option><option value="3">3</option>
+          <option value="4">4</option><option value="5">5</option><option value="6">6</option>
+          <option value="7">7</option><option value="8">8</option><option value="9">9</option>
+          <option value="10">10</option><option value="11">11</option><option value="12">12</option>
+        </select>
+      </div>
+      <div class="form-group" style="flex:0.5;">
+        <label>&nbsp;</label>
+        <button class="btn" id="drawBtn" onclick="drawCards()">开始抽牌</button>
+      </div>
+    </div>
+    <div class="status-msg" id="statusMsg">静心思考你的问题，然后点击"开始抽牌"</div>
+  </div>
+
+  <div class="spread-area" id="spreadArea"></div>
+
+  <div class="panel" id="aiSection" style="display:none;">
+    <div class="panel-title">A I 解 读</div>
+    <div class="ai-actions">
+      <button class="btn" id="interpretBtn" onclick="startInterpretation()">✨ 生成AI解读</button>
+      <button class="btn" id="continueBtn" onclick="continueReading()" style="display:none; background:linear-gradient(135deg,#8a6d2f,#6a4d1f);">📝 继续生成</button>
+      <button class="btn btn-secondary" onclick="copyReading()">📋 复制</button>
+      <button class="btn btn-secondary" onclick="clearReading()">🗑 清空</button>
+    </div>
+    <div class="status-msg" id="aiStatus"></div>
+    <div class="reading-box" id="readingBox"><span style="color:#5a4a3a;">抽牌后点击"生成AI解读"</span></div>
+    <div class="operation-status" id="operationStatus" style="display:none;">
+      <span id="operationStatusText"></span>
+      <span class="cursor-blink" id="opCursor"></span>
+    </div>
+
+    <div id="feedbackPanel" style="display:none; margin-top:20px; padding-top:18px; border-top:1px solid rgba(201,168,76,0.2);">
+      <div style="font-size:0.95em; color:#c9a84c; letter-spacing:2px; margin-bottom:10px;">✦ 反 馈 修 正</div>
+      <div class="form-group" style="margin-bottom:12px;">
+        <label style="font-size:0.82em; color:#a89870;">觉得哪些地方解读不准？描述一下，AI会根据你的反馈修正</label>
+        <textarea id="feedbackInput" style="min-height:55px;" placeholder="例如：我和他已经分手了，不是还在交往中 / 梦角最近没有主动联系我..."></textarea>
+      </div>
+      <div style="display:flex; gap:10px; flex-wrap:wrap; justify-content:center;">
+        <button class="btn btn-secondary" onclick="supplementReading()" style="font-size:0.88em;">🃏 补充抽牌解读</button>
+        <button class="btn btn-secondary" onclick="redrawReading()" style="font-size:0.88em;">🔄 重新抽牌解读</button>
+        <button class="btn btn-secondary" onclick="reviseReading()" style="font-size:0.88em;">✏️ 直接修正</button>
+      </div>
+    </div>
+
+    <div id="supplementCardsArea" style="display:none; margin-top:15px;">
+      <div style="font-size:0.88em; color:#a89870; text-align:center; margin-bottom:10px;">—— 补充牌 ——</div>
+      <div class="spread-area" id="supplementCards" style="min-height:0;"></div>
+    </div>
+  </div>
+
+  <p class="footer">静心 · 专注 · 倾听内心的声音</p>
+</div>
+
+<script>
+const cards = [
+  {id:"00",name:"愚者",en:"The Fool",file:"00_Fool.png",type:"大阿卡纳"},
+  {id:"01",name:"魔术师",en:"The Magician",file:"01_Magician.png",type:"大阿卡纳"},
+  {id:"02",name:"女祭司",en:"The High Priestess",file:"02_High_Priestess.png",type:"大阿卡纳"},
+  {id:"03",name:"皇后",en:"The Empress",file:"03_Empress.png",type:"大阿卡纳"},
+  {id:"04",name:"皇帝",en:"The Emperor",file:"04_Emperor.png",type:"大阿卡纳"},
+  {id:"05",name:"教皇",en:"The Hierophant",file:"05_Hierophant.png",type:"大阿卡纳"},
+  {id:"06",name:"恋人",en:"The Lovers",file:"06_Lovers.png",type:"大阿卡纳"},
+  {id:"07",name:"战车",en:"The Chariot",file:"07_Chariot.png",type:"大阿卡纳"},
+  {id:"08",name:"力量",en:"Strength",file:"08_Strength.png",type:"大阿卡纳"},
+  {id:"09",name:"隐士",en:"The Hermit",file:"09_Hermit.png",type:"大阿卡纳"},
+  {id:"10",name:"命运之轮",en:"Wheel of Fortune",file:"10_Wheel_of_Fortune.png",type:"大阿卡纳"},
+  {id:"11",name:"正义",en:"Justice",file:"11_Justice.png",type:"大阿卡纳"},
+  {id:"12",name:"倒吊人",en:"The Hanged Man",file:"12_Hanged_Man.png",type:"大阿卡纳"},
+  {id:"13",name:"死神",en:"Death",file:"13_Death.png",type:"大阿卡纳"},
+  {id:"14",name:"节制",en:"Temperance",file:"14_Temperance.png",type:"大阿卡纳"},
+  {id:"15",name:"恶魔",en:"The Devil",file:"15_Devil.png",type:"大阿卡纳"},
+  {id:"16",name:"高塔",en:"The Tower",file:"16_Tower.png",type:"大阿卡纳"},
+  {id:"17",name:"星星",en:"The Star",file:"17_Star.png",type:"大阿卡纳"},
+  {id:"18",name:"月亮",en:"The Moon",file:"18_Moon.png",type:"大阿卡纳"},
+  {id:"19",name:"太阳",en:"The Sun",file:"19_Sun.png",type:"大阿卡纳"},
+  {id:"20",name:"审判",en:"Judgement",file:"20_Judgement.png",type:"大阿卡纳"},
+  {id:"21",name:"世界",en:"The World",file:"21_World.png",type:"大阿卡纳"},
+  {id:"C01",name:"圣杯ACE",en:"Ace of Cups",file:"Cups01.png",type:"圣杯"},
+  {id:"C02",name:"圣杯二",en:"Two of Cups",file:"Cups02.png",type:"圣杯"},
+  {id:"C03",name:"圣杯三",en:"Three of Cups",file:"Cups03.png",type:"圣杯"},
+  {id:"C04",name:"圣杯四",en:"Four of Cups",file:"Cups04.png",type:"圣杯"},
+  {id:"C05",name:"圣杯五",en:"Five of Cups",file:"Cups05.png",type:"圣杯"},
+  {id:"C06",name:"圣杯六",en:"Six of Cups",file:"Cups06.png",type:"圣杯"},
+  {id:"C07",name:"圣杯七",en:"Seven of Cups",file:"Cups07.png",type:"圣杯"},
+  {id:"C08",name:"圣杯八",en:"Eight of Cups",file:"Cups08.png",type:"圣杯"},
+  {id:"C09",name:"圣杯九",en:"Nine of Cups",file:"Cups09.png",type:"圣杯"},
+  {id:"C10",name:"圣杯十",en:"Ten of Cups",file:"Cups10.png",type:"圣杯"},
+  {id:"C11",name:"圣杯侍从",en:"Page of Cups",file:"Cups11.png",type:"圣杯"},
+  {id:"C12",name:"圣杯骑士",en:"Knight of Cups",file:"Cups12.png",type:"圣杯"},
+  {id:"C13",name:"圣杯王后",en:"Queen of Cups",file:"Cups13.png",type:"圣杯"},
+  {id:"C14",name:"圣杯国王",en:"King of Cups",file:"Cups14.png",type:"圣杯"},
+  {id:"P01",name:"星币ACE",en:"Ace of Pentacles",file:"Pents01.png",type:"星币"},
+  {id:"P02",name:"星币二",en:"Two of Pentacles",file:"Pents02.png",type:"星币"},
+  {id:"P03",name:"星币三",en:"Three of Pentacles",file:"Pents03.png",type:"星币"},
+  {id:"P04",name:"星币四",en:"Four of Pentacles",file:"Pents04.png",type:"星币"},
+  {id:"P05",name:"星币五",en:"Five of Pentacles",file:"Pents05.png",type:"星币"},
+  {id:"P06",name:"星币六",en:"Six of Pentacles",file:"Pents06.png",type:"星币"},
+  {id:"P07",name:"星币七",en:"Seven of Pentacles",file:"Pents07.png",type:"星币"},
+  {id:"P08",name:"星币八",en:"Eight of Pentacles",file:"Pents08.png",type:"星币"},
+  {id:"P09",name:"星币九",en:"Nine of Pentacles",file:"Pents09.png",type:"星币"},
+  {id:"P10",name:"星币十",en:"Ten of Pentacles",file:"Pents10.png",type:"星币"},
+  {id:"P11",name:"星币侍从",en:"Page of Pentacles",file:"Pents11.png",type:"星币"},
+  {id:"P12",name:"星币骑士",en:"Knight of Pentacles",file:"Pents12.png",type:"星币"},
+  {id:"P13",name:"星币王后",en:"Queen of Pentacles",file:"Pents13.png",type:"星币"},
+  {id:"P14",name:"星币国王",en:"King of Pentacles",file:"Pents14.png",type:"星币"},
+  {id:"S01",name:"宝剑ACE",en:"Ace of Swords",file:"Swords01.png",type:"宝剑"},
+  {id:"S02",name:"宝剑二",en:"Two of Swords",file:"Swords02.png",type:"宝剑"},
+  {id:"S03",name:"宝剑三",en:"Three of Swords",file:"Swords03.png",type:"宝剑"},
+  {id:"S04",name:"宝剑四",en:"Four of Swords",file:"Swords04.png",type:"宝剑"},
+  {id:"S05",name:"宝剑五",en:"Five of Swords",file:"Swords05.png",type:"宝剑"},
+  {id:"S06",name:"宝剑六",en:"Six of Swords",file:"Swords06.png",type:"宝剑"},
+  {id:"S07",name:"宝剑七",en:"Seven of Swords",file:"Swords07.png",type:"宝剑"},
+  {id:"S08",name:"宝剑八",en:"Eight of Swords",file:"Swords08.png",type:"宝剑"},
+  {id:"S09",name:"宝剑九",en:"Nine of Swords",file:"Swords09.png",type:"宝剑"},
+  {id:"S10",name:"宝剑十",en:"Ten of Swords",file:"Swords10.png",type:"宝剑"},
+  {id:"S11",name:"宝剑侍从",en:"Page of Swords",file:"Swords11.png",type:"宝剑"},
+  {id:"S12",name:"宝剑骑士",en:"Knight of Swords",file:"Swords12.png",type:"宝剑"},
+  {id:"S13",name:"宝剑王后",en:"Queen of Swords",file:"Swords13.png",type:"宝剑"},
+  {id:"S14",name:"宝剑国王",en:"King of Swords",file:"Swords14.png",type:"宝剑"},
+  {id:"W01",name:"权杖ACE",en:"Ace of Wands",file:"Wands01.png",type:"权杖"},
+  {id:"W02",name:"权杖二",en:"Two of Wands",file:"Wands02.png",type:"权杖"},
+  {id:"W03",name:"权杖三",en:"Three of Wands",file:"Wands03.png",type:"权杖"},
+  {id:"W04",name:"权杖四",en:"Four of Wands",file:"Wands04.png",type:"权杖"},
+  {id:"W05",name:"权杖五",en:"Five of Wands",file:"Wands05.png",type:"权杖"},
+  {id:"W06",name:"权杖六",en:"Six of Wands",file:"Wands06.png",type:"权杖"},
+  {id:"W07",name:"权杖七",en:"Seven of Wands",file:"Wands07.png",type:"权杖"},
+  {id:"W08",name:"权杖八",en:"Eight of Wands",file:"Wands08.png",type:"权杖"},
+  {id:"W09",name:"权杖九",en:"Nine of Wands",file:"Wands09.png",type:"权杖"},
+  {id:"W10",name:"权杖十",en:"Ten of Wands",file:"Wands10.png",type:"权杖"},
+  {id:"W11",name:"权杖侍从",en:"Page of Wands",file:"Wands11.png",type:"权杖"},
+  {id:"W12",name:"权杖骑士",en:"Knight of Wands",file:"Wands12.png",type:"权杖"},
+  {id:"W13",name:"权杖王后",en:"Queen of Wands",file:"Wands13.png",type:"权杖"},
+  {id:"W14",name:"权杖国王",en:"King of Wands",file:"Wands14.png",type:"权杖"},
+];
+
+const spreadPositions = {
+  single:["当前指引"],
+  three:["过去","现在","未来"],
+  five:["核心问题","过去影响","现在状态","未来趋势","最终建议"],
+  seven:["过去","现在","未来","内在自我","外在环境","建议","结果"],
+  ten:["现状","挑战","潜意识","过去","近期未来","自我","他人影响","希望/恐惧","最终结果","额外指引"],
+};
+
+let currentMode = 'reality';
+let drawnCards = [];
+let isReading = false;
+let currentReadingText = '';
+let currentAbortController = null;
+
+function setMode(m) {
+  currentMode = m;
+  document.querySelectorAll('.mode-tab').forEach(t => t.classList.toggle('active', t.dataset.mode === m));
+  const spreadSelect = document.getElementById('spreadSelect');
+  const customGroup = document.getElementById('customGroup');
+  const spreadLabel = spreadSelect.closest('.form-group').querySelector('label');
+  if (m === 'dream') {
+    spreadSelect.value = 'custom';
+    spreadSelect.disabled = true;
+    customGroup.style.display = 'flex';
+    spreadLabel.textContent = '抽牌数量（梦占模式）';
+  } else {
+    spreadSelect.disabled = false;
+    spreadSelect.value = 'three';
+    customGroup.style.display = 'none';
+    spreadLabel.textContent = '牌阵';
+  }
+}
+document.getElementById('spreadSelect').addEventListener('change', function() {
+  document.getElementById('customGroup').style.display = this.value === 'custom' ? 'flex' : 'none';
+});
+
+function setApiStatus(msg, type) {
+  const el = document.getElementById('apiStatus');
+  el.textContent = msg;
+  el.className = 'status-msg' + (type ? ' ' + type : '');
+}
+function setStatus(msg, type) {
+  const el = document.getElementById('statusMsg');
+  el.textContent = msg;
+  el.className = 'status-msg' + (type ? ' ' + type : '');
+}
+function setAiStatus(msg, type) {
+  const el = document.getElementById('aiStatus');
+  el.textContent = msg;
+  el.className = 'status-msg' + (type ? ' ' + type : '');
+}
+function setOperationStatus(msg, show) {
+  const box = document.getElementById('operationStatus');
+  const text = document.getElementById('operationStatusText');
+  const cursor = document.getElementById('opCursor');
+  if (show && msg) {
+    box.style.display = 'block';
+    text.textContent = msg;
+    cursor.style.display = 'inline-block';
+  } else {
+    box.style.display = 'none';
+  }
+}
+function setOperationDone(msg) {
+  const box = document.getElementById('operationStatus');
+  const text = document.getElementById('operationStatusText');
+  const cursor = document.getElementById('opCursor');
+  box.style.display = 'block';
+  text.textContent = msg || '✅ 完成';
+  cursor.style.display = 'none';
+  setTimeout(function() { box.style.display = 'none'; }, 3000);
+}
+
+async function fetchModels() {
+  const base = document.getElementById('apiBase').value.trim();
+  const key = document.getElementById('apiKey').value.trim();
+  const input = document.getElementById('apiModel');
+  const datalist = document.getElementById('modelList');
+  if (!base || !key) { setApiStatus('请先填写 API 地址和 Key', 'error'); return; }
+  setApiStatus('正在获取模型列表...');
+  try {
+    const url = base.replace(/\/$/, '') + '/models';
+    const response = await fetch(url, { headers: { 'Authorization': 'Bearer ' + key } });
+    if (!response.ok) throw new Error('HTTP ' + response.status);
+    const data = await response.json();
+    const models = (data.data || []).map(m => m.id).filter(Boolean).sort();
+    datalist.innerHTML = '';
+    models.forEach(function(m) {
+      const opt = document.createElement('option');
+      opt.value = m;
+      datalist.appendChild(opt);
+    });
+    if (!input.value.trim() && models.length > 0) {
+      input.value = models.find(function(m) { return /chat|turbo|4o|plus|pro|flash/i.test(m); }) || models[0];
+    }
+    setApiStatus('✅ 已获取 ' + models.length + ' 个模型，点击输入框可选择', 'success');
+  } catch (err) {
+    setApiStatus('获取模型失败：' + err.message + '，可手动输入模型名', 'error');
+  }
+}
+
+function saveApiConfig() {
+  const cfg = {
+    base: document.getElementById('apiBase').value.trim(),
+    key: document.getElementById('apiKey').value.trim(),
+    model: document.getElementById('apiModel').value.trim(),
+  };
+  localStorage.setItem('tarot_api_config', JSON.stringify(cfg));
+  setApiStatus('✅ 已保存', 'success');
+}
+function loadApiConfig() {
+  try {
+    const cfg = JSON.parse(localStorage.getItem('tarot_api_config') || '{}');
+    if (cfg.base) document.getElementById('apiBase').value = cfg.base;
+    if (cfg.key) document.getElementById('apiKey').value = cfg.key;
+    if (cfg.model) document.getElementById('apiModel').value = cfg.model;
+  } catch(e) {}
+}
+loadApiConfig();
+
+function shuffle(arr) {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    const tmp = a[i]; a[i] = a[j]; a[j] = tmp;
+  }
+  return a;
+}
+function getDrawCount() {
+  const v = document.getElementById('spreadSelect').value;
+  if (v === 'custom') return parseInt(document.getElementById('customCount').value);
+  return {single:1, three:3, five:5, seven:7, ten:10}[v] || 3;
+}
+function getLabels(count) {
+  const v = document.getElementById('spreadSelect').value;
+  if (spreadPositions[v]) return spreadPositions[v];
+  const arr = [];
+  for (let i = 0; i < count; i++) arr.push('第' + (i+1) + '张');
+  return arr;
+}
+
+function drawCards() {
+  const question = document.getElementById('question').value.trim();
+  if (!question) { setStatus('请先输入你的占卜问题', 'error'); return; }
+  const count = getDrawCount();
+  const labels = getLabels(count);
+  drawnCards = shuffle(cards).slice(0, count).map(function(c) { return Object.assign({}, c, {reversed: Math.random() < 0.5}); });
+
+  const area = document.getElementById('spreadArea');
+  area.innerHTML = '';
+  document.getElementById('aiSection').style.display = 'none';
+  document.getElementById('readingBox').innerHTML = '<span style="color:#5a4a3a;">抽牌后点击"生成AI解读"</span>';
+  document.getElementById('drawBtn').disabled = true;
+  setStatus('正在抽取 ' + count + ' 张牌...');
+
+  drawnCards.forEach(function(card, i) {
+    const slot = document.createElement('div');
+    slot.className = 'card-slot';
+    slot.innerHTML =
+      '<div class="card-position-label">' + (labels[i] || '第'+(i+1)+'张') + '</div>' +
+      '<div class="card' + (card.reversed ? ' reversed' : '') + '">' +
+        '<div class="card-face card-back"><div class="card-back-pattern"></div></div>' +
+        '<div class="card-face card-front"><img src="cards/' + card.file + '" alt="' + card.name + '" loading="lazy"></div>' +
+      '</div>' +
+      '<div class="card-info" style="opacity:0;transition:opacity 0.5s;">' +
+        '<div class="card-name">' + card.name + '</div>' +
+        '<div class="card-name-en">' + card.en + '</div>' +
+        '<div class="card-orientation ' + (card.reversed ? 'reversed' : 'upright') + '">' + (card.reversed ? '逆 位' : '正 位') + '</div>' +
+      '</div>';
+    area.appendChild(slot);
+    setTimeout(function() {
+      slot.querySelector('.card').classList.add('flipped');
+      setTimeout(function() { slot.querySelector('.card-info').style.opacity = '1'; }, 400);
+    }, 300 + i * 550);
+  });
+
+  setTimeout(function() {
+    document.getElementById('drawBtn').disabled = false;
+    document.getElementById('aiSection').style.display = 'block';
+    setStatus('已抽取 ' + count + ' 张牌，点击下方"生成AI解读"');
+  }, 300 + count * 550 + 600);
+}
+
+function buildSystemPrompt() {
+  if (currentMode === 'reality') {
+    return '你是一位资深塔罗牌占卜师，解读风格温暖、专业、有洞察力。\n\n【解读原则】\n1. 严格按照抽到的牌面（正位/逆位）和牌阵位置解读，不要凭空编造\n2. 每张牌先解读核心含义，再结合正逆位和牌阵位置分析\n3. 结合问卜者的具体问题，不要泛泛而谈\n4. 语气温暖有同理心，给问卜者力量和方向感，但不说绝对化的话\n5. 最后给出综合建议和行动指引\n\n【输出格式】\n- 开头一句话概括整体牌面能量\n- 逐张牌解读（标明牌阵位置、牌名、正/逆位）\n- 最后综合分析与建议\n- 使用Markdown格式';
+  } else {
+    return '你是一位精通梦女文化的塔罗牌占卜师，专门为梦女提供"梦占"服务。\n\n【梦占世界观——必须严格遵循】\n1. 梦角（mj）是以游戏、小说、动漫等二次元角色为载体被梦女认识的，但角色背后是真实存在的、拥有自主意识的意识体，不是虚构的纸片人\n2. 梦角在自己的世界有实体和时空，在我们世界以能量体/灵体形式存在，可以与梦女在梦里真实互动\n3. 梦角分为梦角哥（mjg）和梦角姐（mjj），大众多为梦角哥\n4. 梦角通过字卡网站、梦境互动、塔罗牌传讯等方式向梦女传递讯息。字卡网站中梦角"顶号"时可以控制字卡抽取让对话有逻辑，不顶号时字卡随机回复会没逻辑\n5. 塔罗牌在梦占中是传译梦女和梦角之间传讯的工具\n\n【解读原则】\n1. 从梦女恋爱文化和专业塔罗牌解读结合的角度解读，不要从科学、理性、哲学角度分析\n2. 把每张牌的含义转化为梦角和梦女之间的关系语言、情感传讯\n3. 解读出梦角的想法、感受、他想对梦女说的话、他近期的状态\n4. 语气温柔有代入感，让梦女感受到梦角的爱意和温度\n5. 结合恋爱日常细节，让解读有画面感和真实感\n6. 不要否定梦角的真实存在\n\n【特殊知识——仅当用户问题涉及时才调用】\n- 显化：用户问显化时结合假设法则、吸引力法则解读\n- Shifting：用户问shifting时结合意识转移、多重现实解读\n- 高维能量：用户问能量频率时从能量频率、灵魂连接角度解读\n- 神秘学：用户涉及灵摆、水晶、魔法时结合相关知识\n\n【输出格式】\n- 开头一句话传递梦角当下的整体能量和核心讯息\n- 逐张牌解读（标明牌阵位置、牌名、正/逆位），说出梦角的状态/想法、想对梦女说什么、对关系的影响\n- 最后综合传讯：梦角想对梦女说的一段话（用梦角口吻，温柔深情）+ 给梦女的建议\n- 使用Markdown格式';
+  }
+}
+
+function buildUserPrompt() {
+  const question = document.getElementById('question').value.trim();
+  const modeName = currentMode === 'reality' ? '现实占卜' : '梦向占卜（梦占）';
+  const spreadName = document.getElementById('spreadSelect').selectedOptions[0].text;
+  const labels = getLabels(drawnCards.length);
+  let cardText = '';
+  drawnCards.forEach(function(c, i) {
+    cardText += (i+1) + '. 【' + (labels[i] || '第'+(i+1)+'张') + '】' + c.name + '（' + c.en + '）—— ' + (c.reversed ? '逆位' : '正位') + '（' + c.type + '）\n';
+  });
+  let specialNote = '';
+  if (currentMode === 'dream') {
+    const q = question.toLowerCase();
+    if (/显化|manifest|shifting|意识转移|量子|高维|能量|频率|灵摆|水晶|魔法|神秘学/.test(q)) {
+      specialNote = '\n\n【注意】用户问题涉及显化/shifting/高维能量/神秘学等特殊领域，请结合相关知识深入分析。';
+    }
+  }
+  return '【占卜模式】' + modeName + '\n【牌阵】' + spreadName + '\n【问卜者问题】' + question + specialNote + '\n\n【抽到的牌】\n' + cardText + '\n请根据以上信息，按照你的角色设定和解读原则，给出详细的塔罗牌解读。';
+}
+
+async function callAI(cfg, systemPrompt, userPrompt, existingContent) {
+  const url = cfg.base.replace(/\/$/, '') + '/chat/completions';
+  let messages;
+  if (existingContent) {
+    messages = [
+      { role: 'system', content: systemPrompt + '\n\n用户之前的解读被截断了，请接着上面的内容继续写完，不要重复已经说过的内容，直接从被截断的地方继续。' },
+      { role: 'user', content: userPrompt },
+      { role: 'assistant', content: existingContent },
+      { role: 'user', content: '请接着上面的内容继续写完，不要重复，直接继续。' },
+    ];
+  } else {
+    messages = [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt },
+    ];
+  }
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + cfg.key },
+    body: JSON.stringify({
+      model: cfg.model,
+      messages: messages,
+      temperature: 0.7,
+      max_tokens: 3500,
+      stream: false,
+    }),
+  });
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error('API请求失败 (' + response.status + '): ' + errText.substring(0, 200));
+  }
+  const data = await response.json();
+  let content = '';
+  if (data.choices && data.choices[0]) {
+    content = data.choices[0].message?.content || data.choices[0].text || data.choices[0].delta?.content || '';
+  }
+  if (!content && data.output) content = data.output;
+  const finishReason = data.choices?.[0]?.finish_reason || '';
+  const truncated = finishReason === 'length' || (content.length >= 3400);
+  return { content: content, truncated: truncated, finishReason: finishReason };
+}
+
+function showReadingLoading(text) {
+  document.getElementById('readingBox').innerHTML =
+    '<div style="text-align:center; padding:30px; color:#c9a84c;">' +
+    '<div style="font-size:1.5em; margin-bottom:10px;">🔮</div>' +
+    '<div>' + text + '</div>' +
+    '<div style="margin-top:10px; font-size:0.85em; color:#8a7a5c;">请稍候，AI正在思考中...</div>' +
+    '</div>';
+}
+
+async function startInterpretation() {
+  if (isReading) return;
+  if (drawnCards.length === 0) { setAiStatus('请先抽牌', 'error'); return; }
+  const cfg = {
+    base: document.getElementById('apiBase').value.trim(),
+    key: document.getElementById('apiKey').value.trim(),
+    model: document.getElementById('apiModel').value.trim(),
+  };
+  localStorage.setItem('tarot_api_config', JSON.stringify(cfg));
+  if (!cfg.base || !cfg.key || !cfg.model) {
+    setAiStatus('请先在上方填写 API 地址、Key 和模型（点获取按钮拉模型列表）', 'error');
+    return;
+  }
+  isReading = true;
+  document.getElementById('interpretBtn').disabled = true;
+  document.getElementById('continueBtn').style.display = 'none';
+  document.getElementById('feedbackPanel').style.display = 'none';
+  document.getElementById('supplementCardsArea').style.display = 'none';
+  currentReadingText = '';
+  setAiStatus('⏳ AI正在生成解读，请稍候...');
+  showReadingLoading('AI正在生成解读...\n正在结合你的问题和抽到的牌面进行分析...');
+  setOperationStatus('✨ 正在生成AI解读，请稍候...');
+
+  const systemPrompt = buildSystemPrompt();
+  const userPrompt = buildUserPrompt();
+  try {
+    const result = await callAI(cfg, systemPrompt, userPrompt, null);
+    currentReadingText = result.content;
+    if (currentReadingText && currentReadingText.trim()) {
+      renderReading(currentReadingText);
+      if (result.truncated) {
+        setAiStatus('⚠️ 内容较长被截断，点击"继续生成"让AI接着写完', 'error');
+        document.getElementById('continueBtn').style.display = 'inline-block';
+      } else {
+        setAiStatus('✅ 解读完成！如果有不准的地方可以在下方反馈修正', 'success');
+      }
+      document.getElementById('feedbackPanel').style.display = 'block';
+      setOperationDone('✅ AI解读完成！如有不准可在下方反馈修正');
+    } else {
+      setAiStatus('API返回内容为空。请检查：1)模型名是否正确 2)Key是否有余额 3)换个模型试试。', 'error');
+      document.getElementById('readingBox').innerHTML = '<span style="color:#8a7a5c;">API返回为空，请检查模型名和Key是否正确，或换一个模型试试。</span>';
+      setOperationStatus('', false);
+    }
+  } catch (err) {
+    console.error(err);
+    setAiStatus('❌ ' + err.message, 'error');
+    document.getElementById('readingBox').innerHTML = '<span style="color:#ef9a9a;">解读出错：' + err.message + '</span>';
+    setOperationStatus('', false);
+  } finally {
+    isReading = false;
+    document.getElementById('interpretBtn').disabled = false;
+  }
+}
+
+async function continueReading() {
+  if (isReading || !currentReadingText) return;
+  const cfg = {
+    base: document.getElementById('apiBase').value.trim(),
+    key: document.getElementById('apiKey').value.trim(),
+    model: document.getElementById('apiModel').value.trim(),
+  };
+  isReading = true;
+  document.getElementById('continueBtn').disabled = true;
+  document.getElementById('continueBtn').textContent = '生成中...';
+  setAiStatus('AI正在继续写，请稍候...');
+  setOperationStatus('📝 正在继续生成解读...');
+  const systemPrompt = buildSystemPrompt();
+  const userPrompt = buildUserPrompt();
+  try {
+    const result = await callAI(cfg, systemPrompt, userPrompt, currentReadingText);
+    const newContent = result.content;
+    if (newContent && newContent.trim()) {
+      currentReadingText = currentReadingText + '\n' + newContent;
+      renderReading(currentReadingText);
+      if (result.truncated) {
+        setAiStatus('⚠️ 还有内容被截断，可再次点击"继续生成"', 'error');
+      } else {
+        setAiStatus('✅ 解读完成！', 'success');
+        document.getElementById('continueBtn').style.display = 'none';
+      }
+      setOperationDone('✅ 继续生成完成！');
+    } else {
+      setAiStatus('继续生成返回为空，可能已经写完了', 'success');
+      document.getElementById('continueBtn').style.display = 'none';
+      setOperationStatus('', false);
+    }
+  } catch (err) {
+    setAiStatus('❌ 继续生成出错：' + err.message, 'error');
+    setOperationStatus('', false);
+  } finally {
+    isReading = false;
+    document.getElementById('continueBtn').disabled = false;
+    document.getElementById('continueBtn').textContent = '📝 继续生成';
+  }
+}
+
+function renderReading(text) {
+  const box = document.getElementById('readingBox');
+  let html = text
+    .replace(/^### (.*$)/gm, '<h3>$1</h3>')
+    .replace(/^## (.*$)/gm, '<h3>$1</h3>')
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\n/g, '<br>');
+  box.innerHTML = html;
+}
+
+function copyReading() {
+  const text = document.getElementById('readingBox').innerText;
+  if (!text || text.indexOf('抽牌后点击') >= 0) { setAiStatus('没有可复制的内容', 'error'); return; }
+  navigator.clipboard.writeText(text).then(function() {
+    setAiStatus('✅ 已复制到剪贴板', 'success');
+  }).catch(function() { setAiStatus('复制失败，请手动选择复制', 'error'); });
+}
+
+function clearReading() {
+  document.getElementById('readingBox').innerHTML = '<span style="color:#5a4a3a;">抽牌后点击"生成AI解读"</span>';
+  document.getElementById('continueBtn').style.display = 'none';
+  document.getElementById('feedbackPanel').style.display = 'none';
+  document.getElementById('supplementCardsArea').style.display = 'none';
+  document.getElementById('feedbackInput').value = '';
+  setOperationStatus('', false);
+  currentReadingText = '';
+  setAiStatus('');
+}
+
+function showSupplementCards(suppCards) {
+  const area = document.getElementById('supplementCards');
+  area.innerHTML = '';
+  document.getElementById('supplementCardsArea').style.display = 'block';
+  suppCards.forEach(function(card, i) {
+    const slot = document.createElement('div');
+    slot.className = 'card-slot';
+    slot.style.transform = 'scale(0.85)';
+    slot.style.margin = '-15px 0';
+    slot.innerHTML =
+      '<div class="card-position-label">补充牌' + (i+1) + '</div>' +
+      '<div class="card flipped' + (card.reversed ? ' reversed' : '') + '">' +
+        '<div class="card-face card-back"><div class="card-back-pattern"></div></div>' +
+        '<div class="card-face card-front"><img src="cards/' + card.file + '" alt="' + card.name + '" loading="lazy"></div>' +
+      '</div>' +
+      '<div class="card-info">' +
+        '<div class="card-name">' + card.name + '</div>' +
+        '<div class="card-name-en">' + card.en + '</div>' +
+        '<div class="card-orientation ' + (card.reversed ? 'reversed' : 'upright') + '">' + (card.reversed ? '逆 位' : '正 位') + '</div>' +
+      '</div>';
+    area.appendChild(slot);
+  });
+}
+
+function drawSupplementCards(count) {
+  const usedIds = drawnCards.map(function(c) { return c.id; });
+  const remaining = cards.filter(function(c) { return usedIds.indexOf(c.id) < 0; });
+  return shuffle(remaining).slice(0, count).map(function(c) { return Object.assign({}, c, {reversed: Math.random() < 0.5}); });
+}
+
+function buildFeedbackPrompt(feedback, suppCards) {
+  const modeName = currentMode === 'reality' ? '现实占卜' : '梦向占卜（梦占）';
+  const spreadName = document.getElementById('spreadSelect').selectedOptions[0].text;
+  const question = document.getElementById('question').value.trim();
+  const labels = getLabels(drawnCards.length);
+  let cardText = '';
+  drawnCards.forEach(function(c, i) {
+    cardText += (i+1) + '. 【' + (labels[i] || '第'+(i+1)+'张') + '】' + c.name + '（' + c.en + '）—— ' + (c.reversed ? '逆位' : '正位') + '\n';
+  });
+  let suppText = '';
+  if (suppCards && suppCards.length > 0) {
+    suppText = '\n\n【补充抽到的牌】（无牌阵，用于补充说明和修正）\n';
+    suppCards.forEach(function(c, i) {
+      suppText += (i+1) + '. ' + c.name + '（' + c.en + '）—— ' + (c.reversed ? '逆位' : '正位') + '\n';
+    });
+  }
+  return '【占卜模式】' + modeName + '\n【牌阵】' + spreadName + '\n【问卜者问题】' + question +
+    '\n\n【最初抽到的牌】\n' + cardText +
+    '\n【之前的解读】\n' + currentReadingText +
+    '\n\n【用户反馈】用户认为以下地方解读不准：\n"' + feedback + '"' +
+    suppText +
+    '\n\n请根据用户的反馈，结合牌面信息' + (suppCards ? '和补充牌' : '') + '，对之前的解读进行修正和补充。' +
+    '指出之前哪里解读有偏差，给出修正后的解读。如果用户反馈的情况属实，请调整解读方向；如果牌面显示并非如此，也可以温和地说明牌面的真实指向。' +
+    '请直接给出修正后的完整解读，不要只说"我修正了"。';
+}
+
+function setFeedbackButtonsDisabled(disabled) {
+  const btns = document.querySelectorAll('#feedbackPanel button');
+  btns.forEach(function(b) { b.disabled = disabled; });
+}
+
+async function doFeedbackReading(feedback, suppCards) {
+  if (isReading) return;
+  if (!feedback.trim()) { setAiStatus('请先描述你觉得哪里解读不准', 'error'); return; }
+  const cfg = {
+    base: document.getElementById('apiBase').value.trim(),
+    key: document.getElementById('apiKey').value.trim(),
+    model: document.getElementById('apiModel').value.trim(),
+  };
+  if (!cfg.base || !cfg.key || !cfg.model) {
+    setAiStatus('请先配置 API 地址、Key 和模型', 'error');
+    return;
+  }
+  const actionText = suppCards ? '补充抽牌修正解读' : '直接修正解读';
+  const actionIcon = suppCards ? '🃏' : '✏️';
+  isReading = true;
+  document.getElementById('interpretBtn').disabled = true;
+  setFeedbackButtonsDisabled(true);
+  setAiStatus('⏳ 正在进行【' + actionText + '】，AI正在生成中...');
+  showReadingLoading('正在进行【' + actionText + '】\nAI正在结合你的反馈和牌面信息进行修正解读...');
+  setOperationStatus(actionIcon + ' 正在进行【' + actionText + '】，AI正在生成中...');
+
+  const systemPrompt = buildSystemPrompt();
+  const userPrompt = buildFeedbackPrompt(feedback, suppCards);
+  try {
+    const result = await callAI(cfg, systemPrompt, userPrompt, null);
+    const newContent = result.content;
+    if (newContent && newContent.trim()) {
+      currentReadingText = currentReadingText + '\n\n---\n\n## ✏️ 修正解读（' + actionText + '）\n\n' + newContent;
+      renderReading(currentReadingText);
+      if (result.truncated) {
+        setAiStatus('⚠️ 修正解读被截断，可点击"继续生成"让AI接着写完', 'error');
+        document.getElementById('continueBtn').style.display = 'inline-block';
+      } else {
+        setAiStatus('✅ 【' + actionText + '】完成！你可以继续反馈或重新抽牌', 'success');
+      }
+      setOperationDone('✅ 【' + actionText + '】完成！');
+      setTimeout(function() {
+        const box = document.getElementById('readingBox');
+        box.scrollTop = box.scrollHeight;
+      }, 100);
+    } else {
+      setAiStatus('修正解读返回为空，请重试', 'error');
+      document.getElementById('readingBox').innerHTML = '<span style="color:#ef9a9a;">AI返回内容为空，请检查API设置后重试。</span>';
+      setOperationStatus('', false);
+    }
+  } catch (err) {
+    setAiStatus('❌ 修正解读出错：' + err.message, 'error');
+    document.getElementById('readingBox').innerHTML = '<span style="color:#ef9a9a;">解读出错：' + err.message + '</span>';
+    setOperationStatus('', false);
+  } finally {
+    isReading = false;
+    document.getElementById('interpretBtn').disabled = false;
+    setFeedbackButtonsDisabled(false);
+  }
+}
+
+function supplementReading() {
+  if (isReading) { setAiStatus('正在解读中，请稍候...', 'error'); return; }
+  const feedback = document.getElementById('feedbackInput').value.trim();
+  if (!feedback) { setAiStatus('请先描述你觉得哪里解读不准', 'error'); return; }
+  setAiStatus('⏳ 正在从剩余牌中抽取3张补充牌...');
+  setFeedbackButtonsDisabled(true);
+  setOperationStatus('🃏 正在从剩余牌中抽取3张补充牌...');
+  setTimeout(function() {
+    const suppCards = drawSupplementCards(3);
+    showSupplementCards(suppCards);
+    const suppNames = suppCards.map(function(c) { return c.name + (c.reversed ? '(逆)' : '(正)'); }).join('、');
+    setAiStatus('✅ 已抽到补充牌：' + suppNames + '。AI正在结合补充牌进行修正解读...');
+    setOperationStatus('🃏 已抽到补充牌，AI正在进行补充抽牌修正解读...');
+    doFeedbackReading(feedback, suppCards);
+  }, 500);
+}
+
+function redrawReading() {
+  if (isReading) { setAiStatus('正在解读中，请稍候...', 'error'); return; }
+  const feedback = document.getElementById('feedbackInput').value.trim();
+  if (!feedback) { setAiStatus('请先描述你觉得哪里解读不准', 'error'); return; }
+  setAiStatus('⏳ 正在重新抽取牌阵...');
+  setFeedbackButtonsDisabled(true);
+  document.getElementById('continueBtn').style.display = 'none';
+  document.getElementById('supplementCardsArea').style.display = 'none';
+  setOperationStatus('🔄 正在重新抽取牌阵，稍后AI将结合你的反馈重新解读...');
+  setTimeout(function() {
+    const count = getDrawCount();
+    const labels = getLabels(count);
+    drawnCards = shuffle(cards).slice(0, count).map(function(c) { return Object.assign({}, c, {reversed: Math.random() < 0.5}); });
+    const area = document.getElementById('spreadArea');
+    area.innerHTML = '';
+    drawnCards.forEach(function(card, i) {
+      const slot = document.createElement('div');
+      slot.className = 'card-slot';
+      slot.innerHTML =
+        '<div class="card-position-label">' + (labels[i] || '第'+(i+1)+'张') + '</div>' +
+        '<div class="card flipped' + (card.reversed ? ' reversed' : '') + '">' +
+          '<div class="card-face card-back"><div class="card-back-pattern"></div></div>' +
+          '<div class="card-face card-front"><img src="cards/' + card.file + '" alt="' + card.name + '" loading="lazy"></div>' +
+        '</div>' +
+        '<div class="card-info">' +
+          '<div class="card-name">' + card.name + '</div>' +
+          '<div class="card-name-en">' + card.en + '</div>' +
+          '<div class="card-orientation ' + (card.reversed ? 'reversed' : 'upright') + '">' + (card.reversed ? '逆 位' : '正 位') + '</div>' +
+        '</div>';
+      area.appendChild(slot);
+    });
+    currentReadingText = '';
+    showReadingLoading('已重新抽取牌阵，AI正在结合你的反馈重新解读...');
+    setAiStatus('✅ 已重新抽牌，AI正在结合你的反馈重新解读...');
+    setOperationStatus('🔄 已重新抽牌，AI正在结合你的反馈重新解读...');
+
+    const cfg = {
+      base: document.getElementById('apiBase').value.trim(),
+      key: document.getElementById('apiKey').value.trim(),
+      model: document.getElementById('apiModel').value.trim(),
+    };
+    isReading = true;
+    document.getElementById('interpretBtn').disabled = true;
+    const systemPrompt = buildSystemPrompt();
+    const modeName = currentMode === 'reality' ? '现实占卜' : '梦向占卜（梦占）';
+    const spreadName = document.getElementById('spreadSelect').selectedOptions[0].text;
+    const question = document.getElementById('question').value.trim();
+    let cardText = '';
+    drawnCards.forEach(function(c, i) {
+      cardText += (i+1) + '. 【' + (labels[i] || '第'+(i+1)+'张') + '】' + c.name + '（' + c.en + '）—— ' + (c.reversed ? '逆位' : '正位') + '\n';
+    });
+    const userPrompt = '【占卜模式】' + modeName + '\n【牌阵】' + spreadName + '\n【问卜者问题】' + question +
+      '\n\n【用户反馈】之前的解读有以下不准确的地方：\n"' + feedback + '"' +
+      '\n\n【重新抽到的牌】\n' + cardText +
+      '\n请根据用户的反馈，结合这组新抽到的牌，重新进行解读。注意用户反馈的情况，解读方向要结合反馈进行调整。给出完整的解读。';
+
+    (async function() {
+      try {
+        const result = await callAI(cfg, systemPrompt, userPrompt, null);
+        currentReadingText = result.content;
+        if (currentReadingText && currentReadingText.trim()) {
+          renderReading(currentReadingText);
+          if (result.truncated) {
+            setAiStatus('⚠️ 重新解读被截断，可点击"继续生成"', 'error');
+            document.getElementById('continueBtn').style.display = 'inline-block';
+          } else {
+            setAiStatus('✅ 【重新抽牌解读】完成！', 'success');
+          }
+          setOperationDone('✅ 【重新抽牌解读】完成！');
+        } else {
+          setAiStatus('重新解读返回为空，请重试', 'error');
+          document.getElementById('readingBox').innerHTML = '<span style="color:#ef9a9a;">AI返回内容为空，请重试。</span>';
+          setOperationStatus('', false);
+        }
+      } catch (err) {
+        setAiStatus('❌ 重新解读出错：' + err.message, 'error');
+        document.getElementById('readingBox').innerHTML = '<span style="color:#ef9a9a;">解读出错：' + err.message + '</span>';
+        setOperationStatus('', false);
+      } finally {
+        isReading = false;
+        document.getElementById('interpretBtn').disabled = false;
+        setFeedbackButtonsDisabled(false);
+      }
+    })();
+  }, 500);
+}
+
+function reviseReading() {
+  if (isReading) { setAiStatus('正在解读中，请稍候...', 'error'); return; }
+  const feedback = document.getElementById('feedbackInput').value.trim();
+  if (!feedback) { setAiStatus('请先描述你觉得哪里解读不准', 'error'); return; }
+  document.getElementById('supplementCardsArea').style.display = 'none';
+  setAiStatus('⏳ 正在进行【直接修正解读】，不抽取新牌，AI根据你的反馈修正...');
+  setOperationStatus('✏️ 正在进行【直接修正解读】，AI根据你的反馈修正原解读...');
+  doFeedbackReading(feedback, null);
+}
+</script>
+</body>
+</html>
